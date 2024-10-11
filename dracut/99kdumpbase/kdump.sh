@@ -30,7 +30,6 @@ HOST_IP='127.0.0.1'
 DUMP_INSTRUCTION=""
 SSH_KEY_LOCATION=$DEFAULT_SSHKEY
 DD_BLKSIZE=512
-FINAL_ACTION="systemctl reboot -f"
 KDUMP_PRE=""
 KDUMP_POST=""
 NEWROOT="/sysroot"
@@ -88,19 +87,6 @@ get_kdump_confs() {
                         ;;
                     dump_to_rootfs)
                         FAILURE_ACTION="dump_to_rootfs"
-                        ;;
-                esac
-                ;;
-            final_action)
-                case $config_val in
-                    reboot)
-                        FINAL_ACTION="systemctl reboot -f"
-                        ;;
-                    halt)
-                        FINAL_ACTION="halt"
-                        ;;
-                    poweroff)
-                        FINAL_ACTION="systemctl poweroff -f"
                         ;;
                 esac
                 ;;
@@ -316,8 +302,22 @@ do_failure_action() {
 }
 
 do_final_action() {
-    dinfo "Executing final action $FINAL_ACTION"
-    eval "$FINAL_ACTION"
+    _cred="$CREDENTIALS_DIRECTORY/kdump_final_action"
+    [ -e "$_cred" ] || systemctl reboot -f
+    read -r _action < "$_cred"
+
+    dinfo "Executing final action $_action"
+    case "$_action" in
+        halt)
+            halt
+            ;;
+        poweroff)
+            systemctl poweroff -f
+            ;;
+        reboot|*)
+            systemctl reboot -f
+            ;;
+    esac
 }
 
 do_dump() {

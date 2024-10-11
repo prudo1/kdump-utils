@@ -42,7 +42,7 @@ check() {
 }
 
 depends() {
-    local _dep="base shutdown"
+    local _dep="base shutdown systemd-creds"
 
     kdump_module_init
 
@@ -721,7 +721,9 @@ default_dump_target_install_conf() {
 #install kdump.conf and what user specifies in kdump.conf
 kdump_install_conf() {
     local _opt _val _pdev
+    local _creds="${initdir}/etc/credstore/kdump"
 
+    mkdir -p "$_creds"
     kdump_read_conf > "${initdir}/tmp/$$-kdump.conf"
 
     while read -r _opt _val; do
@@ -751,6 +753,7 @@ kdump_install_conf() {
                 dracut_install "${_val%%[[:blank:]]*}"
                 ;;
         esac
+        echo "$_val" > "$_creds/$_opt"
     done <<< "$(kdump_read_conf)"
 
     kdump_install_pre_post_conf
