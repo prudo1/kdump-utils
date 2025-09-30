@@ -513,34 +513,38 @@ prepare_kexec_args()
 prepare_kdump_kernel()
 {
 	local kdump_kernelver=$1
-	local dir img boot_dirlist boot_imglist kdump_kernel machine_id
+	local dir img machine_id
+	local -a dirlist=()
+	local -a imglist=()
+
 	read -r machine_id < /etc/machine-id
 
-	boot_dirlist=${KDUMP_BOOTDIR:-"/boot /boot/efi /efi /"}
-	boot_imglist="$KDUMP_IMG-$kdump_kernelver$KDUMP_IMG_EXT \
-		$machine_id/$kdump_kernelver/$KDUMP_IMG \
-		EFI/Linux/$machine_id-$kdump_kernelver.efi"
-
 	# The kernel of OSTree based systems is not in the standard locations.
-	if is_ostree; then
-		boot_dirlist="$(echo /boot/ostree/*) $boot_dirlist"
+	is_ostree && dirlist+=("/boot/ostree/*")
+
+	if [[ -n $KDUMP_BOOTDIR ]]; then
+		dirlist+=("$KDUMP_BOOTDIR")
+	else
+		dirlist+=(/boot /boot/efi /efi /)
 	fi
 
 	# Use BOOT_IMAGE as reference if possible, strip the GRUB root device prefix in (hd0,gpt1) format
 	boot_img="$(grep -P -o '^BOOT_IMAGE=(\S+)' /proc/cmdline | sed "s/^BOOT_IMAGE=\((\S*)\)\?\(\S*\)/\2/")"
 	if [[ $boot_img == *"$kdump_kernelver" ]]; then
-		boot_imglist="$boot_img $boot_imglist"
+		imglist+=("$boot_img")
 	fi
 
-	for dir in $boot_dirlist; do
-		for img in $boot_imglist; do
-			if [[ -f "$dir/$img" ]]; then
-				kdump_kernel=$(echo "$dir/$img" | tr -s '/')
-				break 2
-			fi
+	imglist+=("$KDUMP_IMG-$kdump_kernelver$KDUMP_IMG_EXT")
+	imglist+=("$machine_id/$kdump_kernelver/$KDUMP_IMG")
+	imglist+=("EFI/Linux/$machine_id-$kdump_kernelver.efi")
+
+	for dir in "${dirlist[@]}"; do
+		for img in "${imglist[@]}"; do
+			[[ -f "$dir/$img" ]] || continue
+			echo "$dir/$img" | tr -s '/'
+			return
 		done
 	done
-	echo "$kdump_kernel"
 }
 
 _is_valid_kver()
