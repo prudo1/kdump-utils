@@ -521,6 +521,7 @@ prepare_kdump_kernel()
 	local -a imglist=()
 
 	read -r machine_id < /etc/machine-id
+	[[ -z $KDUMP_IMG ]] && KDUMP_IMG=vmlinuz
 
 	# The kernel of OSTree based systems is not in the standard locations.
 	is_ostree && dirlist+=("/boot/ostree/*")
