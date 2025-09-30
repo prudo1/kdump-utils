@@ -529,10 +529,11 @@ prepare_kdump_kernel()
 	fi
 
 	# Use BOOT_IMAGE as reference if possible, strip the GRUB root device prefix in (hd0,gpt1) format
-	boot_img="$(grep -P -o '^BOOT_IMAGE=(\S+)' /proc/cmdline | sed "s/^BOOT_IMAGE=\((\S*)\)\?\(\S*\)/\2/")"
-	if [[ $boot_img == *"$kdump_kernelver" ]]; then
-		imglist+=("$boot_img")
-	fi
+	while read -r -d ' ' img; do
+		[[ $img == BOOT_IMAGE=* ]] || continue
+		[[ $img == *"$kdump_kernelver"* ]] || continue
+		imglist+=("${img#*/}")
+	done < /proc/cmdline
 
 	imglist+=("$KDUMP_IMG-$kdump_kernelver$KDUMP_IMG_EXT")
 	imglist+=("$machine_id/$kdump_kernelver/$KDUMP_IMG")
