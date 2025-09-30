@@ -17,6 +17,9 @@ FADUMP_APPEND_ARGS_SYS_NODE="/sys/kernel/fadump/bootargs_append"
 # shellcheck disable=SC2034
 FENCE_KDUMP_CONFIG_FILE="/etc/sysconfig/fence_kdump"
 
+EFIVARS="/sys/firmware/efi/efivars"
+EFIVAR_StubImageIdentifier="$EFIVARS/StubImageIdentifier-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f"
+
 is_uki()
 {
 	local img
@@ -537,7 +540,19 @@ prepare_kdump_kernel()
 
 	imglist+=("$KDUMP_IMG-$kdump_kernelver$KDUMP_IMG_EXT")
 	imglist+=("$machine_id/$kdump_kernelver/$KDUMP_IMG")
-	imglist+=("EFI/Linux/$machine_id-$kdump_kernelver.efi")
+
+	# UKIs are supposed to contain the machine-id according to the BLS.
+	# However, ImageBuilder doesn't know the machine-id when creating an
+	# image. So it uses a fake machine-id 'fff...f'. Thus prefer the path
+	# provided in the EFI var.
+	if [[ -f $EFIVAR_StubImageIdentifier ]]; then
+		img="$(tr -cd '[:print:]' < $EFIVAR_StubImageIdentifier)"
+		img="${img//\\/\/}"
+		img="${img#/}"
+		imglist+=("$img")
+	else
+		imglist+=("EFI/Linux/$machine_id-$kdump_kernelver.efi")
+	fi
 
 	for dir in "${dirlist[@]}"; do
 		for img in "${imglist[@]}"; do
