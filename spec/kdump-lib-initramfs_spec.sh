@@ -12,6 +12,11 @@ Describe 'kdump-lib-initramfs'
 			#|dracut_args --omit-drivers "cfg80211 snd" --add-drivers "ext2 ext3"
 			#|sshkey /root/.ssh/kdump_id_rsa
 			#|ssh user@my.server.com
+			#|    ext2	  	/dev/sda1		# trailing comment
+			#|    ext2		/dev/sdb1	   	# trailing comment
+			#|virtiofs /dev/sdc1
+			#|# Note: this and the next line are comments
+			#|#virtiofs /dev/sdd1
 			#|core_collector "makedumpfile -l --message-level 7 -d 31"
 		}
 		kdump_config >$KDUMP_CONFIG_FILE
@@ -28,9 +33,11 @@ Describe 'kdump-lib-initramfs'
 				"#2" ssh user@my.server.com
 				"#3" failure_action shell
 				"#4" dracut_args '--omit-drivers "cfg80211 snd" --add-drivers "ext2 ext3"'
-				"#5" 'ssh\|aaa' user@my.server.com
-				"#6" 'aaa\|ssh' user@my.server.com
+				"#5" 'ssh|aaa' user@my.server.com
+				"#6" 'aaa|ssh' user@my.server.com
 				"#7" core_collector "makedumpfile -l --message-level 7 -d 31"
+				"#8" ext2 /dev/sdb1
+				"#9" 'ext[234]|xfs|btrfs|minix|raw|virtiofs' /dev/sdc1
 			End
 
 			It 'should handle all cases correctly'
