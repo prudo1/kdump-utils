@@ -12,6 +12,8 @@ fi
 . "$dracutbasedir"/dracut-functions.sh
 # shellcheck source=SCRIPTDIR/kdump-lib.sh
 . /lib/kdump/kdump-lib.sh
+# shellcheck source=SCRIPTDIR/kdump-lib-dracut.sh
+. /lib/kdump/kdump-lib-dracut.sh
 # shellcheck source=SCRIPTDIR/kdump-logger.sh
 . /lib/kdump/kdump-logger.sh
 
@@ -24,7 +26,6 @@ fi
 MKFADUMPRD_TMPDIR="$KDUMP_TMPDIR/mkfadump"
 mkdir "$MKFADUMP_TMPDIR" || perror_exit "Failed to create mkfadump tmpdir."
 
-MKDUMPRD="/sbin/mkdumprd"
 # Default boot initramfs to be rebuilt
 REBUILD_INITRD="$1" && shift
 TARGET_INITRD="$1" && shift
@@ -38,7 +39,7 @@ ddebug "rebuild fadump initrd: $FADUMP_INITRD"
 # compression ratio and increases the size of the initramfs image.
 # Don't compress the capture image as uncompressed image is needed immediately.
 # Also, early microcode would not be needed here.
-if ! $MKDUMPRD "$FADUMP_INITRD" -i "$MKFADUMPRD_TMPDIR/fadump.initramfs" /etc/fadump.initramfs --omit squash --omit squash-squashfs --omit squash-erofs --no-compress --no-early-microcode; then
+if ! mkdumprd "$FADUMP_INITRD" -i "$MKFADUMPRD_TMPDIR/fadump.initramfs" /etc/fadump.initramfs --omit squash --omit squash-squashfs --omit squash-erofs --no-compress --no-early-microcode; then
 	perror_exit "mkfadumprd: failed to build image with dump capture support"
 fi
 

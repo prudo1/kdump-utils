@@ -89,7 +89,6 @@ fi
 %{_prefix}/lib/kernel/install.d/60-fadump.install
 %endif
 %{_bindir}/kdumpctl
-%{_sbindir}/mkdumprd
 %{_prefix}/lib/kdump
 %config(noreplace,missingok) %{_sysconfdir}/sysconfig/kdump
 %config(noreplace,missingok) %verify(not mtime) %{_sysconfdir}/kdump.conf
@@ -104,7 +103,6 @@ fi
 %dir %{_sysconfdir}/kdump/post.d
 %dir %{_sharedstatedir}/kdump
 %{_mandir}/man8/kdumpctl.8*
-%{_mandir}/man8/mkdumprd.8*
 %{_mandir}/man5/kdump.conf.5*
 %{_unitdir}/kdump.service
 %{_prefix}/lib/systemd/system-generators/kdump-dep-generator.sh

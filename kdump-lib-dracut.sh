@@ -1,31 +1,10 @@
 #!/bin/bash --norc
-# New mkdumprd
+# Kdump common functions to interact with dracut
 #
 # Copyright 2011 Red Hat, Inc.
 #
 # Written by Cong Wang <amwang@redhat.com>
 #
-
-[[ -n $debug ]] && set -x
-
-if [[ -f /etc/sysconfig/kdump ]]; then
-	# shellcheck source=/dev/null
-	. /etc/sysconfig/kdump
-fi
-
-[[ $dracutbasedir ]] || dracutbasedir=/usr/lib/dracut
-# shellcheck source=/dev/null
-. "$dracutbasedir"/dracut-functions.sh
-# shellcheck source=SCRIPTDIR/kdump-lib.sh
-. /lib/kdump/kdump-lib.sh
-# shellcheck source=SCRIPTDIR/kdump-logger.sh
-. /lib/kdump/kdump-logger.sh
-
-#initiate the kdump logger
-if ! dlog_init; then
-	echo "failed to initiate the kdump logger."
-	exit 1
-fi
 
 # check whether the given dracut module is installed. If multiple modules are
 # provided return true if any of them is installed.
@@ -448,5 +427,3 @@ mkdumprd()
 
 	dracut "${dracut_args[@]}" "$@"
 }
-
-mkdumprd "$@"

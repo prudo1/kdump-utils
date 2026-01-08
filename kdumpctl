@@ -4,7 +4,6 @@ KEXEC=/sbin/kexec
 KDUMP_KERNELVER=""
 KDUMP_KERNEL=""
 KEXEC_ARGS=""
-MKDUMPRD="/sbin/mkdumprd"
 MKFADUMPRD="/sbin/mkfadumprd"
 DRACUT_MODULES_FILE="/usr/lib/dracut/modules.txt"
 
@@ -49,6 +48,8 @@ else
 fi
 # shellcheck source=SCRIPTDIR/kdump-lib.sh
 . $KDUMP_LIB_PATH/kdump-lib.sh
+# shellcheck source=SCRIPTDIR/kdump-lib-dracut.sh
+. $KDUMP_LIB_PATH/kdump-lib-dracut.sh
 # shellcheck source=SCRIPTDIR/kdump-logger.sh
 . $KDUMP_LIB_PATH/kdump-logger.sh
 
@@ -178,9 +179,9 @@ check_earlykdump_is_enabled()
 
 rebuild_kdump_initrd()
 {
-	ddebug "rebuild kdump initrd: $MKDUMPRD $TARGET_INITRD $KDUMP_KERNELVER"
-	if ! $MKDUMPRD "$TARGET_INITRD" "$KDUMP_KERNELVER"; then
-		derror "mkdumprd: failed to make kdump initrd"
+	ddebug "rebuild kdump initrd: mkdumprd $TARGET_INITRD $KDUMP_KERNELVER"
+	if ! mkdumprd "$TARGET_INITRD" "$KDUMP_KERNELVER"; then
+		derror "kdumpctl: failed to make kdump initrd"
 		return 1
 	fi
 

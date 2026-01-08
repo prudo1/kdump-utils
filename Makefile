@@ -52,7 +52,7 @@ static-analysis:
 	shellcheck -e 2317,2329,2288,2215 -x spec/*.sh
 
 manpages:
-	install -D -m 644 mkdumprd.8 kdumpctl.8 -t $(DESTDIR)$(mandir)/man8
+	install -D -m 644 kdumpctl.8 -t $(DESTDIR)$(mandir)/man8
 	install -D -m 644 kdump.conf.5 $(DESTDIR)$(mandir)/man5/kdump.conf.5
 
 install: dracut-modules kdump-conf kdump-sysconfig manpages
@@ -65,10 +65,9 @@ install: dracut-modules kdump-conf kdump-sysconfig manpages
 	mkdir -p -m755 $(DESTDIR)$(libdir)/kernel/install.d/
 
 	install -D -m 755 kdumpctl $(DESTDIR)$(bindir)/kdumpctl
-	install -D -m 755 mkdumprd $(DESTDIR)$(sbindir)/mkdumprd
 	install -D -m 644 kdump.conf $(DESTDIR)$(sysconfdir)
 	install -D -m 644 kdump.sysconfig $(DESTDIR)$(sysconfdir)/sysconfig/kdump
-	install -D -m 755 kdump-lib.sh kdump-lib-initramfs.sh kdump-logger.sh -t $(DESTDIR)$(pkglibdir)
+	install -D -m 755 kdump-lib.sh kdump-lib-initramfs.sh kdump-lib-dracut.sh kdump-logger.sh -t $(DESTDIR)$(pkglibdir)
 	install -D -m 644 99-kdump.conf -t $(DESTDIR)$(pkglibdir)/dracut.conf.d
 
 ifeq ($(ARCH), $(filter ppc64le ppc64,$(ARCH)))
