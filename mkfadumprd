@@ -24,7 +24,7 @@ fi
 MKFADUMPRD_TMPDIR="$KDUMP_TMPDIR/mkfadump"
 mkdir "$MKFADUMP_TMPDIR" || perror_exit "Failed to create mkfadump tmpdir."
 
-MKDUMPRD="/sbin/mkdumprd -f"
+MKDUMPRD="/sbin/mkdumprd"
 # Default boot initramfs to be rebuilt
 REBUILD_INITRD="$1" && shift
 TARGET_INITRD="$1" && shift

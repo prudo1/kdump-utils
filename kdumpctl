@@ -4,7 +4,7 @@ KEXEC=/sbin/kexec
 KDUMP_KERNELVER=""
 KDUMP_KERNEL=""
 KEXEC_ARGS=""
-MKDUMPRD="/sbin/mkdumprd -f"
+MKDUMPRD="/sbin/mkdumprd"
 MKFADUMPRD="/sbin/mkfadumprd"
 DRACUT_MODULES_FILE="/usr/lib/dracut/modules.txt"
 

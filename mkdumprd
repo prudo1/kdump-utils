@@ -306,6 +306,7 @@ mkdumprd()
 {
 	declare -a dracut_args
 
+	dracut_args+=(--force)
 	dracut_args+=(--quiet)
 	dracut_args+=(--hostonly)
 	dracut_args+=(--hostonly-cmdline)
