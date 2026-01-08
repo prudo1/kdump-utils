@@ -20,25 +20,12 @@ fi
 . /lib/kdump/kdump-lib.sh
 # shellcheck source=SCRIPTDIR/kdump-logger.sh
 . /lib/kdump/kdump-logger.sh
-export IN_KDUMP=1
 
 #initiate the kdump logger
 if ! dlog_init; then
 	echo "failed to initiate the kdump logger."
 	exit 1
 fi
-
-SSH_KEY_LOCATION=$DEFAULT_SSHKEY
-SAVE_PATH=$(get_save_path)
-
-declare -a dracut_args
-dracut_args+=(--quiet)
-dracut_args+=(--hostonly)
-dracut_args+=(--hostonly-cmdline)
-dracut_args+=(--hostonly-i18n)
-dracut_args+=(--hostonly-mode strict)
-dracut_args+=(--hostonly-nics '')
-dracut_args+=(--aggressive-strip)
 
 # check whether the given dracut module is installed. If multiple modules are
 # provided return true if any of them is installed.
@@ -315,125 +302,150 @@ handle_default_dump_target()
 	check_size fs "$_target" "$_subvol"
 }
 
-# firstly get right SSH_KEY_LOCATION
-keyfile=$(kdump_get_conf_val sshkey)
-if [[ -f $keyfile ]]; then
-	# canonicalize the path
-	SSH_KEY_LOCATION=$(/usr/bin/readlink -m "$keyfile")
-fi
+mkdumprd()
+{
+	declare -a dracut_args
 
-while read -r config_opt config_val; do
-	# remove inline comments after the end of a directive.
-	case "$config_opt" in
-	extra_modules)
-		dracut_args+=(--add-drivers "$config_val")
-		;;
-	ext[234] | xfs | btrfs | minix | nfs | virtiofs)
-		check_user_configured_target "$config_val" "$config_opt"
-		add_mount "$config_val" "$config_opt"
-		;;
-	raw)
-		# checking raw disk writable
-		dd if="$config_val" count=1 of=/dev/null > /dev/null 2>&1 || {
-			perror_exit "Bad raw disk $config_val"
-		}
-		_praw=$(persistent_policy="by-id" kdump_get_persistent_dev "$config_val")
-		if [[ -z $_praw ]]; then
-			exit 1
-		fi
-		dracut_args+=(--device "$_praw")
-		check_size raw "$config_val"
-		;;
-	ssh)
-		if strstr "$config_val" "@"; then
-			mkdir_save_path_ssh "$config_val"
-			check_size ssh "$config_val"
-			dracut_args+=(--sshkey "$SSH_KEY_LOCATION")
-		else
-			perror_exit "Bad ssh dump target $config_val"
-		fi
-		;;
-	core_collector)
-		verify_core_collector "$config_val"
-		;;
-	dracut_args)
+	dracut_args+=(--quiet)
+	dracut_args+=(--hostonly)
+	dracut_args+=(--hostonly-cmdline)
+	dracut_args+=(--hostonly-i18n)
+	dracut_args+=(--hostonly-mode strict)
+	dracut_args+=(--hostonly-nics '')
+	dracut_args+=(--aggressive-strip)
 
-		# When users specify nfs dumping via dracut_args, kdump-utils won't
-		# mount nfs fs beforehand thus nfsv4-related drivers won't be installed
-		# because we call dracut with --hostonly-mode strict. So manually install
-		# nfsv4-related drivers.
-		if [[ $(get_dracut_args_fstype "$config_val") == nfs* ]]; then
-			dracut_args+=(--add-drivers "nfs_layout_nfsv41_files")
-		fi
+	export IN_KDUMP=1
 
-		while read -r dracut_arg; do
-			dracut_args+=("$dracut_arg")
-		done <<< "$(echo "$config_val" | xargs -n 1 echo)"
-		;;
-	*) ;;
-
-	esac
-done <<< "$(kdump_read_conf)"
-
-handle_default_dump_target
-
-if ! have_compression_in_dracut_args; then
-	# With dracut 104 the 99squash module got split up into 99squash and
-	# 95squash-squashfs as well as the new 95squash-erofs. Explicitly set
-	# which image type is required otherwise the requested compression
-	# algorithm might not be supported.
-	if has_dracut_module squash-squashfs && has_command mksquashfs; then
-		dracut_args+=(--add squash-squashfs)
-		dracut_args+=(--squash-compressor zstd)
-	elif has_dracut_module squash-erofs && has_command mkfs.erofs; then
-		dracut_args+=(--add squash-erofs)
-		dracut_args+=(--squash-compressor lzma)
-	elif has_command mksquashfs; then
-		# only true for dracut <= 103
-		dracut_args+=(--add squash)
-		dracut_args+=(--squash-compressor zstd)
+	# firstly get right SSH_KEY_LOCATION
+	keyfile=$(kdump_get_conf_val sshkey)
+	if [[ -f $keyfile ]]; then
+		# canonicalize the path
+		SSH_KEY_LOCATION=$(/usr/bin/readlink -m "$keyfile")
+	else
+		SSH_KEY_LOCATION=$DEFAULT_SSHKEY
 	fi
-fi
 
-# TODO: The below check is not needed anymore with the introduction of
-#       'zz-fadumpinit' module, that isolates fadump's capture kernel initrd,
-#       but still sysroot.mount unit gets generated based on 'root=' kernel
-#       parameter available in fadump case. So, find a way to fix that first
-#       before removing this check.
-if ! is_fadump_capable; then
-	# The 2nd rootfs mount stays behind the normal dump target mount,
-	# so it doesn't affect the logic of check_dump_fs_modified().
-	is_dump_to_rootfs && add_mount "$(to_dev_name "$(get_root_fs_device)")"
+	SAVE_PATH=$(get_save_path)
 
-	dracut_args+=(--no-hostonly-default-device)
+	while read -r config_opt config_val; do
+		# remove inline comments after the end of a directive.
+		case "$config_opt" in
+		extra_modules)
+			dracut_args+=(--add-drivers "$config_val")
+			;;
+		ext[234] | xfs | btrfs | minix | nfs | virtiofs)
+			check_user_configured_target "$config_val" "$config_opt"
+			add_mount "$config_val" "$config_opt"
+			;;
+		raw)
+			# checking raw disk writable
+			dd if="$config_val" count=1 of=/dev/null > /dev/null 2>&1 || {
+				perror_exit "Bad raw disk $config_val"
+			}
+			_praw=$(persistent_policy="by-id" kdump_get_persistent_dev "$config_val")
+			if [[ -z $_praw ]]; then
+				exit 1
+			fi
+			dracut_args+=(--device "$_praw")
+			check_size raw "$config_val"
+			;;
+		ssh)
+			if strstr "$config_val" "@"; then
+				mkdir_save_path_ssh "$config_val"
+				check_size ssh "$config_val"
+				dracut_args+=(--sshkey "$SSH_KEY_LOCATION")
+			else
+				perror_exit "Bad ssh dump target $config_val"
+			fi
+			;;
+		core_collector)
+			verify_core_collector "$config_val"
+			;;
+		dracut_args)
 
-	# When FIPS mode is enabled, the fips dracut module needs to use
-	# /boot/.vmlinuz-${KERNEL}.hmac to verify the integrity of the kernel.
-	#
-	# If /boot is on a separate partition, the fips module will mount /boot
-	# based on the boot= kernel parameter.
-	#
-	# If /boot is not on a separate partition, the fips dracut module will
-	# link /sysroot/boot to /boot. So we need to mount the root partition
-	# to /sysroot beforehand.
-	if [[ $(cat /proc/sys/crypto/fips_enabled 2> /dev/null) == 1 ]]; then
-		_boot_source=$(findmnt -n -o SOURCE --target /boot)
-		_disk_persistent=$(get_persistent_dev "$_boot_source")
-		if mountpoint -q /boot; then
-			dracut_args+=(--add-device "$_disk_persistent")
-		else
-			add_mount "$_boot_source"
+			# When users specify nfs dumping via dracut_args,
+			# kdump-utils won't mount nfs fs beforehand thus
+			# nfsv4-related drivers won't be installed because we
+			# call dracut with --hostonly-mode strict. So manually
+			# install nfsv4-related drivers.
+			if [[ $(get_dracut_args_fstype "$config_val") == nfs* ]]; then
+				dracut_args+=(--add-drivers "nfs_layout_nfsv41_files")
+			fi
+
+			while read -r dracut_arg; do
+				dracut_args+=("$dracut_arg")
+			done <<< "$(echo "$config_val" | xargs -n 1 echo)"
+			;;
+		*) ;;
+
+		esac
+	done <<< "$(kdump_read_conf)"
+
+	handle_default_dump_target
+
+	if ! have_compression_in_dracut_args; then
+		# With dracut 104 the 99squash module got split up into
+		# 99squash and 95squash-squashfs as well as the new
+		# 95squash-erofs. Explicitly set which image type is required
+		# otherwise the requested compression algorithm might not be
+		# supported.
+		if has_dracut_module squash-squashfs && has_command mksquashfs; then
+			dracut_args+=(--add squash-squashfs)
+			dracut_args+=(--squash-compressor zstd)
+		elif has_dracut_module squash-erofs && has_command mkfs.erofs; then
+			dracut_args+=(--add squash-erofs)
+			dracut_args+=(--squash-compressor lzma)
+		elif has_command mksquashfs; then
+			# only true for dracut <= 103
+			dracut_args+=(--add squash)
+			dracut_args+=(--squash-compressor zstd)
 		fi
 	fi
-fi
 
-# Use kdump managed dracut profile.
-[[ $kdump_dracut_confdir ]] || kdump_dracut_confdir=/lib/kdump/dracut.conf.d
-if [[ "$(dracut --help)" == *--add-confdir* ]] && [[ -d $kdump_dracut_confdir ]]; then
-	dracut_args+=("--add-confdir" "$kdump_dracut_confdir")
-else
-	dracut_args+=(--add kdumpbase)
-	dracut_args+=(--omit "rdma plymouth resume ifcfg earlykdump")
-fi
+	# TODO: The below check is not needed anymore with the introduction of
+	# 'zz-fadumpinit' module, that isolates fadump's capture kernel initrd,
+	# but still sysroot.mount unit gets generated based on 'root=' kernel
+	# parameter available in fadump case. So, find a way to fix that first
+	# before removing this check.
+	if ! is_fadump_capable; then
+		# The 2nd rootfs mount stays behind the normal dump target
+		# mount, so it doesn't affect the logic of
+		# check_dump_fs_modified().
+		is_dump_to_rootfs && add_mount "$(to_dev_name "$(get_root_fs_device)")"
 
-dracut "${dracut_args[@]}" "$@"
+		dracut_args+=(--no-hostonly-default-device)
+
+		# When FIPS mode is enabled, the fips dracut module needs to
+		# use /boot/.vmlinuz-${KERNEL}.hmac to verify the integrity of
+		# the kernel.
+		#
+		# If /boot is on a separate partition, the fips module will
+		# mount /boot based on the boot= kernel parameter.
+		#
+		# If /boot is not on a separate partition, the fips dracut
+		# module will link /sysroot/boot to /boot. So we need to mount
+		# the root partition to /sysroot beforehand.
+		if [[ $(cat /proc/sys/crypto/fips_enabled 2> /dev/null) == 1 ]]; then
+			_boot_source=$(findmnt -n -o SOURCE --target /boot)
+			_disk_persistent=$(get_persistent_dev "$_boot_source")
+			if mountpoint -q /boot; then
+				dracut_args+=(--add-device "$_disk_persistent")
+			else
+				add_mount "$_boot_source"
+			fi
+		fi
+	fi
+
+	# Use kdump managed dracut profile.
+	[[ $kdump_dracut_confdir ]] || kdump_dracut_confdir=/lib/kdump/dracut.conf.d
+	if [[ "$(dracut --help)" == *--add-confdir* ]] && [[ -d $kdump_dracut_confdir ]]; then
+		dracut_args+=("--add-confdir" "$kdump_dracut_confdir")
+	else
+		dracut_args+=(--add kdumpbase)
+		dracut_args+=(--omit "rdma plymouth resume ifcfg earlykdump")
+	fi
+
+	dracut "${dracut_args[@]}" "$@"
+}
+
+mkdumprd "$@"
