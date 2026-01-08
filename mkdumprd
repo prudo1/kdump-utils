@@ -40,21 +40,6 @@ dracut_args+=(--hostonly-mode strict)
 dracut_args+=(--hostonly-nics '')
 dracut_args+=(--aggressive-strip)
 
-MKDUMPRD_TMPDIR="$(mktemp -d -t mkdumprd.XXXXXX)"
-[ -d "$MKDUMPRD_TMPDIR" ] || perror_exit "dracut: mktemp -p -d -t dracut.XXXXXX failed."
-MKDUMPRD_TMPMNT="$MKDUMPRD_TMPDIR/target"
-
-# shellcheck disable=SC2154 # known issue of shellcheck https://github.com/koalaman/shellcheck/issues/1299
-trap '
-    ret=$?;
-    is_mounted $MKDUMPRD_TMPMNT && umount -f $MKDUMPRD_TMPMNT;
-    [[ -d $MKDUMPRD_TMPDIR ]] && rm --one-file-system -rf -- "$MKDUMPRD_TMPDIR";
-    exit $ret;
-    ' EXIT
-
-# clean up after ourselves no matter how we die.
-trap 'exit 1;' SIGINT
-
 # check whether the given dracut module is installed. If multiple modules are
 # provided return true if any of them is installed.
 has_dracut_module()
@@ -255,7 +240,7 @@ check_user_configured_target()
 			fi
 		fi
 	else
-		_mnt=$MKDUMPRD_TMPMNT
+		_mnt=$KDUMP_TMPMNT
 		mkdir -p "$_mnt"
 		$_timeout_cmd mount "$_target" "$_mnt" -t "$_fstype" -o defaults || mount_failure "$_target" "" "$_fstype"
 		_mounted=$_mnt

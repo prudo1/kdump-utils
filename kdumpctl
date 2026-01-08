@@ -58,11 +58,12 @@ if ! dlog_init; then
 	exit 1
 fi
 
-KDUMP_TMPDIR=$(mktemp --tmpdir -d kdump.XXXX)
-TMPMNT="$KDUMP_TMPDIR/target"
+export KDUMP_TMPDIR=$(mktemp --tmpdir -d kdump.XXXX)
+[ -d "$KDUMP_TMPDIR" ] || perror_exit "kdumpctl: Failed to create tmpdir."
+export KDUMP_TMPMNT="$KDUMP_TMPDIR/target"
 trap '
     ret=$?;
-    is_mounted $TMPMNT && umount -f $TMPMNT;
+    is_mounted $KDUMP_TMPMNT && umount -f $KDUMP_TMPMNT;
     rm -rf "$KDUMP_TMPDIR"
     [[ -d $LUKS_CONFIGFS ]] && find $LUKS_CONFIGFS/ -mindepth 1 -type d -delete
     exit $ret;
@@ -2082,12 +2083,12 @@ fetch_status()
 		fi
 
 		if [[ -z $_mnt ]] || ! is_mounted "$_mnt"; then
-			mkdir -p "$TMPMNT"
-			$_timeout_cmd mount "${OPT[_target]}" "$TMPMNT" -t "${OPT[_fstype]}" -o defaults ||
+			mkdir -p "$KDUMP_TMPMNT"
+			$_timeout_cmd mount "${OPT[_target]}" "$KDUMP_TMPMNT" -t "${OPT[_fstype]}" -o defaults ||
 				{
 					dwarn "Failed to mount ${OPT[_target]}" && return 2
 				}
-			_mnt="$TMPMNT"
+			_mnt="$KDUMP_TMPMNT"
 		fi
 		_status="$_mnt/$_status"
 	elif is_ssh_dump_target; then
