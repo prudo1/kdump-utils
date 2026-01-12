@@ -70,7 +70,7 @@ get_ssh_size()
 	local _out
 	local _opt=("-i" "$SSH_KEY_LOCATION" "-o" "BatchMode=yes" "-o" "StrictHostKeyChecking=yes")
 
-	if ! _out=$(ssh -q -n "${_opt[@]}" "$1" "df" "--output=avail" "$SAVE_PATH"); then
+	if ! _out=$(ssh -q -n "${_opt[@]}" "$1" "df" "--output=avail" "${OPT[path]}"); then
 		perror_exit "checking remote ssh server available size failed."
 	fi
 
@@ -79,18 +79,18 @@ get_ssh_size()
 
 #mkdir if save path does not exist on ssh dump target
 #$1=ssh dump target
-#caller should ensure write permission on $1:$SAVE_PATH
+#caller should ensure write permission on $1:${OPT[path]}
 #called from while loop and shouldn't read from stdin, so we're using "ssh -n"
 mkdir_save_path_ssh()
 {
 	local _opt _dir
 	_opt=(-i "$SSH_KEY_LOCATION" -o BatchMode=yes -o StrictHostKeyChecking=yes)
-	ssh -qn "${_opt[@]}" "$1" mkdir -p "$SAVE_PATH" &> /dev/null ||
-		perror_exit "mkdir failed on $1:$SAVE_PATH"
+	ssh -qn "${_opt[@]}" "$1" mkdir -p "${OPT[path]}" &> /dev/null ||
+		perror_exit "mkdir failed on $1:${OPT[path]}"
 
-	# check whether user has write permission on $1:$SAVE_PATH
-	_dir=$(ssh -qn "${_opt[@]}" "$1" mktemp -dqp "$SAVE_PATH" 2> /dev/null) ||
-		perror_exit "Could not create temporary directory on $1:$SAVE_PATH. Make sure user has write permission on destination"
+	# check whether user has write permission on $1:${OPT[path]}
+	_dir=$(ssh -qn "${_opt[@]}" "$1" mktemp -dqp "${OPT[path]}" 2> /dev/null) ||
+		perror_exit "Could not create temporary directory on $1:${OPT[path]}. Make sure user has write permission on destination"
 	ssh -qn "${_opt[@]}" "$1" rmdir "$_dir"
 
 	return 0
@@ -100,7 +100,7 @@ mkdir_save_path_ssh()
 #$1=dump target
 get_fs_size()
 {
-	df --output=avail "$(get_mntpoint_from_target "$1" "$2")/$SAVE_PATH" | tail -1
+	df --output=avail "$(get_mntpoint_from_target "$1" "$2")/${OPT[path]}" | tail -1
 }
 
 #Function: get_raw_size
@@ -212,9 +212,9 @@ check_user_configured_target()
 		_mounted=$_mnt
 	fi
 
-	# For user configured target, use $SAVE_PATH as the dump path within the target
-	if [[ ! -d "$_mnt/$SAVE_PATH" ]]; then
-		perror_exit "Dump path \"$SAVE_PATH\" does not exist in dump target \"$_target\""
+	# For user configured target, use ${OPT[path]} as the dump path within the target
+	if [[ ! -d "$_mnt/${OPT[path]}" ]]; then
+		perror_exit "Dump path \"${OPT[path]}\" does not exist in dump target \"$_target\""
 	fi
 
 	check_size fs "$_target"
@@ -265,9 +265,9 @@ handle_default_dump_target()
 
 	is_user_configured_dump_target && return
 
-	check_save_path_fs "$SAVE_PATH"
+	check_save_path_fs "${OPT[path]}"
 
-	_save_path=$(get_bind_mount_source "$SAVE_PATH")
+	_save_path=$(get_bind_mount_source "${OPT[path]}")
 	_options=$(get_mount_info OPTIONS target "$_save_path" -f)
 	_target=$(get_target_from_path "$_save_path")
 	_fstype=$(get_fs_type_from_target "$_target")
@@ -276,7 +276,7 @@ handle_default_dump_target()
 	fi
 
 	_mntpoint=$(get_mntpoint_from_target "$_target" "$_subvol")
-	SAVE_PATH=${_save_path##"$_mntpoint"}
+	{OPT[path]}=${_save_path##"$_mntpoint"}
 	add_mount "$_target" "$_fstype" "$_options"
 	check_size fs "$_target" "$_subvol"
 }
@@ -304,8 +304,6 @@ mkdumprd()
 	else
 		SSH_KEY_LOCATION=$DEFAULT_SSHKEY
 	fi
-
-	SAVE_PATH=$(get_save_path)
 
 	while read -r config_opt config_val; do
 		# remove inline comments after the end of a directive.
