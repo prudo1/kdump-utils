@@ -283,7 +283,8 @@ handle_default_dump_target()
 
 mkdumprd()
 {
-	declare -a dracut_args
+	local -a dracut_args
+	local _arg
 
 	dracut_args+=(--force)
 	dracut_args+=(--quiet)
@@ -294,14 +295,25 @@ mkdumprd()
 	dracut_args+=(--hostonly-nics '')
 	dracut_args+=(--aggressive-strip)
 
+	[[ -n ${OPT[extra_modules]} ]] && dracut_args+=(--add-drivers "${OPT[extra_modules]}")
+
+	# When users specify nfs dumping via dracut_args, kdump-utils won't
+	# mount nfs fs beforehand thus nfsv4-related drivers won't be installed
+	# because we call dracut with --hostonly-mode strict. So manually
+	# install nfsv4-related drivers.
+	if [[ $(get_dracut_args_fstype "${OPT[dracut_args]}") == nfs* ]]; then
+		dracut_args+=(--add-drivers "nfs_layout_nfsv41_files")
+	fi
+
+	while read -r _arg; do
+		dracut_args+=("$_arg")
+	done <<< "$(echo "${OPT[dracut_args]}" | xargs -n 1 echo)"
+
 	export IN_KDUMP=1
 
 	while read -r config_opt config_val; do
 		# remove inline comments after the end of a directive.
 		case "$config_opt" in
-		extra_modules)
-			dracut_args+=(--add-drivers "$config_val")
-			;;
 		ext[234] | xfs | btrfs | minix | nfs | virtiofs)
 			check_user_configured_target "$config_val" "$config_opt"
 			add_mount "$config_val" "$config_opt"
@@ -329,21 +341,6 @@ mkdumprd()
 			;;
 		core_collector)
 			verify_core_collector "$config_val"
-			;;
-		dracut_args)
-
-			# When users specify nfs dumping via dracut_args,
-			# kdump-utils won't mount nfs fs beforehand thus
-			# nfsv4-related drivers won't be installed because we
-			# call dracut with --hostonly-mode strict. So manually
-			# install nfsv4-related drivers.
-			if [[ $(get_dracut_args_fstype "$config_val") == nfs* ]]; then
-				dracut_args+=(--add-drivers "nfs_layout_nfsv41_files")
-			fi
-
-			while read -r dracut_arg; do
-				dracut_args+=("$dracut_arg")
-			done <<< "$(echo "$config_val" | xargs -n 1 echo)"
 			;;
 		*) ;;
 
