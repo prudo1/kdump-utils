@@ -281,6 +281,11 @@ handle_default_dump_target()
 	check_size fs "$_target" "$_subvol"
 }
 
+have_compression_in_dracut_args()
+{
+	[[ ${OPT[dracut_args]} =~ (^|[[:space:]])--(gzip|bzip2|lzma|xz|lzo|lz4|zstd|no-compress|compress|squash-compressor)([[:space:]]|$) ]]
+}
+
 mkdumprd()
 {
 	local -a dracut_args
