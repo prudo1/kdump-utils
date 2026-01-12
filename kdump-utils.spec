@@ -85,7 +85,6 @@ fi
 
 %files
 %ifarch ppc64 ppc64le
-%{_sbindir}/mkfadumprd
 %{_prefix}/lib/kernel/install.d/60-fadump.install
 %endif
 %{_bindir}/kdumpctl

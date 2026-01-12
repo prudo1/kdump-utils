@@ -4,7 +4,6 @@ KEXEC=/sbin/kexec
 KDUMP_KERNELVER=""
 KDUMP_KERNEL=""
 KEXEC_ARGS=""
-MKFADUMPRD="/sbin/mkfadumprd"
 DRACUT_MODULES_FILE="/usr/lib/dracut/modules.txt"
 
 # Path to the initrd used for normal boot. Used to determine the naming
@@ -163,7 +162,7 @@ determine_dump_mode()
 
 rebuild_fadump_initrd()
 {
-	if ! $MKFADUMPRD "$DEFAULT_INITRD_BAK" "$TARGET_INITRD" --kver "$KDUMP_KERNELVER"; then
+	if ! mkfadump "$DEFAULT_INITRD_BAK" "$TARGET_INITRD" --kver "$KDUMP_KERNELVER"; then
 		derror "mkfadumprd: failed to make fadump initrd"
 		return 1
 	fi
