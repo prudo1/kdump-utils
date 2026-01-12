@@ -68,7 +68,7 @@ to_mount()
 get_ssh_size()
 {
 	local _out
-	local _opt=("-i" "$SSH_KEY_LOCATION" "-o" "BatchMode=yes" "-o" "StrictHostKeyChecking=yes")
+	local _opt=("-i" "${OPT[sshkey]}" "-o" "BatchMode=yes" "-o" "StrictHostKeyChecking=yes")
 
 	if ! _out=$(ssh -q -n "${_opt[@]}" "$1" "df" "--output=avail" "${OPT[path]}"); then
 		perror_exit "checking remote ssh server available size failed."
@@ -84,7 +84,7 @@ get_ssh_size()
 mkdir_save_path_ssh()
 {
 	local _opt _dir
-	_opt=(-i "$SSH_KEY_LOCATION" -o BatchMode=yes -o StrictHostKeyChecking=yes)
+	_opt=(-i "${OPT[sshkey]}" -o BatchMode=yes -o StrictHostKeyChecking=yes)
 	ssh -qn "${_opt[@]}" "$1" mkdir -p "${OPT[path]}" &> /dev/null ||
 		perror_exit "mkdir failed on $1:${OPT[path]}"
 
@@ -296,15 +296,6 @@ mkdumprd()
 
 	export IN_KDUMP=1
 
-	# firstly get right SSH_KEY_LOCATION
-	keyfile=$(kdump_get_conf_val sshkey)
-	if [[ -f $keyfile ]]; then
-		# canonicalize the path
-		SSH_KEY_LOCATION=$(/usr/bin/readlink -m "$keyfile")
-	else
-		SSH_KEY_LOCATION=$DEFAULT_SSHKEY
-	fi
-
 	while read -r config_opt config_val; do
 		# remove inline comments after the end of a directive.
 		case "$config_opt" in
@@ -331,7 +322,7 @@ mkdumprd()
 			if strstr "$config_val" "@"; then
 				mkdir_save_path_ssh "$config_val"
 				check_size ssh "$config_val"
-				dracut_args+=(--sshkey "$SSH_KEY_LOCATION")
+				dracut_args+=(--sshkey "${OPT[sshkey]}")
 			else
 				perror_exit "Bad ssh dump target $config_val"
 			fi
