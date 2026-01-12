@@ -228,29 +228,44 @@ check_user_configured_target()
 # $1: core_collector config value
 verify_core_collector()
 {
-	local _cmd="${1%% *}"
-	local _params="${1#"${_cmd}"}"
+	local _cmd _params
 
-	if [[ $_cmd != "makedumpfile" ]]; then
-		if is_raw_dump_target; then
+	read -r _cmd _params <<< "$1"
+
+	if ! has_command "$_cmd"; then
+		derror "core_collector command $_cmd does not exist."
+		return 1
+	fi
+
+	case "$_cmd" in
+	makedumpfile)
+		case "${OPT[_fstype]}" in
+		ssh | raw)
+			if [[ " $_params " != *" -F "* ]]; then
+				dwarn "Target ${OPT[_fstype]} must use the flattened kdump format. Please add option -F makedumpfile."
+				return 1
+			fi
+			_params="$_params vmcore"
+			;;
+		*)
+			_params="$_params vmcore dumpfile"
+			;;
+		esac
+
+		# shellcheck disable=SC2086
+		if ! $_cmd --check-params $_params; then
+			derror "Invalid makedumpfile parameter \"$_params\"."
+			return 1
+		fi
+		;;
+	*)
+		if [[ ${OPT[_fstype]} == raw ]]; then
 			dwarn "Warning: specifying a non-makedumpfile core collector, you will have to recover the vmcore manually."
 		fi
-		return
-	fi
+		;;
+	esac
 
-	if is_ssh_dump_target || is_raw_dump_target; then
-		if ! strstr "$_params" "-F"; then
-			perror_exit 'The specified dump target needs makedumpfile "-F" option.'
-		fi
-		_params="$_params vmcore"
-	else
-		_params="$_params vmcore dumpfile"
-	fi
-
-	# shellcheck disable=SC2086
-	if ! $_cmd --check-params $_params; then
-		perror_exit "makedumpfile parameter check failed."
-	fi
+	return 0
 }
 
 add_mount()
@@ -345,7 +360,7 @@ mkdumprd()
 			fi
 			;;
 		core_collector)
-			verify_core_collector "$config_val"
+			verify_core_collector "$config_val" || exit
 			;;
 		*) ;;
 
