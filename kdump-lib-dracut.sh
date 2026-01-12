@@ -453,11 +453,7 @@ mkfadumprd()
 	)
 
 	# Use zstd compression method, if available
-	if ! have_compression_in_dracut_args; then
-		if has_command zstd; then
-			_dracut_isolate_args+=(--compress zstd)
-		fi
-	fi
+	has_command zstd && _dracut_isolate_args+=(--compress zstd)
 
 	if ! dracut --force --quiet "${_dracut_isolate_args[@]}" "$@" "$TARGET_INITRD"; then
 		perror_exit "mkfadumprd: failed to setup '$TARGET_INITRD' with dump capture capability"
