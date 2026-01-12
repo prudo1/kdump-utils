@@ -225,49 +225,6 @@ check_user_configured_target()
 	fi
 }
 
-# $1: core_collector config value
-verify_core_collector()
-{
-	local _cmd _params
-
-	read -r _cmd _params <<< "$1"
-
-	if ! has_command "$_cmd"; then
-		derror "core_collector command $_cmd does not exist."
-		return 1
-	fi
-
-	case "$_cmd" in
-	makedumpfile)
-		case "${OPT[_fstype]}" in
-		ssh | raw)
-			if [[ " $_params " != *" -F "* ]]; then
-				dwarn "Target ${OPT[_fstype]} must use the flattened kdump format. Please add option -F makedumpfile."
-				return 1
-			fi
-			_params="$_params vmcore"
-			;;
-		*)
-			_params="$_params vmcore dumpfile"
-			;;
-		esac
-
-		# shellcheck disable=SC2086
-		if ! $_cmd --check-params $_params; then
-			derror "Invalid makedumpfile parameter \"$_params\"."
-			return 1
-		fi
-		;;
-	*)
-		if [[ ${OPT[_fstype]} == raw ]]; then
-			dwarn "Warning: specifying a non-makedumpfile core collector, you will have to recover the vmcore manually."
-		fi
-		;;
-	esac
-
-	return 0
-}
-
 add_mount()
 {
 	dracut_args+=(--mount "$(to_mount "$@")") || exit 1
@@ -358,9 +315,6 @@ mkdumprd()
 			else
 				perror_exit "Bad ssh dump target $config_val"
 			fi
-			;;
-		core_collector)
-			verify_core_collector "$config_val" || exit
 			;;
 		*) ;;
 
