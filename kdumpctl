@@ -978,13 +978,13 @@ check_fence_kdump_config()
 {
 	local hostname
 	local ipaddrs
-	local nodes
+
+	[[ -n ${OPT[fence_kdump_nodes]} ]] || return 0
 
 	hostname=$(hostname)
 	ipaddrs=$(hostname -I)
-	nodes=${OPT[fence_kdump_nodes]}
 
-	for node in $nodes; do
+	for node in ${OPT[fence_kdump_nodes]}; do
 		if [[ $node == "$hostname" ]]; then
 			derror "Option fence_kdump_nodes cannot contain $hostname"
 			return 1
