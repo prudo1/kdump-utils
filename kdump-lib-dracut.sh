@@ -235,8 +235,6 @@ handle_default_dump_target()
 {
 	local _target _mntpoint _fstype _subvol _options
 
-	is_user_configured_dump_target && return
-
 	check_save_path_fs "${OPT[path]}"
 
 	_save_path=$(get_bind_mount_source "${OPT[path]}")
@@ -288,40 +286,33 @@ mkdumprd()
 
 	export IN_KDUMP=1
 
-	while read -r config_opt config_val; do
-		# remove inline comments after the end of a directive.
-		case "$config_opt" in
-		ext[234] | xfs | btrfs | minix | nfs | virtiofs)
-			check_user_configured_target "$config_val" "$config_opt"
-			add_mount "$config_val" "$config_opt"
-			;;
-		raw)
-			# checking raw disk writable
-			dd if="$config_val" count=1 of=/dev/null > /dev/null 2>&1 || {
-				perror_exit "Bad raw disk $config_val"
-			}
-			_praw=$(persistent_policy="by-id" kdump_get_persistent_dev "$config_val")
-			if [[ -z $_praw ]]; then
-				exit 1
-			fi
-			dracut_args+=(--device "$_praw")
-			check_size raw "$config_val"
-			;;
-		ssh)
-			if strstr "$config_val" "@"; then
-				mkdir_save_path_ssh "$config_val"
-				check_size ssh "$config_val"
-				dracut_args+=(--sshkey "${OPT[sshkey]}")
-			else
-				perror_exit "Bad ssh dump target $config_val"
-			fi
-			;;
-		*) ;;
-
-		esac
-	done <<< "$(kdump_read_conf)"
-
-	handle_default_dump_target
+	case "${OPT[_fstype]}" in
+	"")
+		handle_default_dump_target
+		;;
+	ext[234] | xfs | btrfs | minix | nfs | virtiofs)
+		check_user_configured_target "${OPT[_target]}" "${OPT[_fstype]}"
+		add_mount "${OPT[_target]}" "${OPT[_fstype]}"
+		;;
+	raw)
+		# checking raw disk writable
+		dd if="${OPT[_target]}" count=1 of=/dev/null > /dev/null 2>&1 || {
+			perror_exit "Bad raw disk ${OPT[_target]}"
+		}
+		_praw=$(persistent_policy="by-id" kdump_get_persistent_dev "${OPT[_target]}")
+		[[ -n $_praw ]] || return 1
+		dracut_args+=(--device "$_praw")
+		check_size raw "${OPT[_target]}"
+		;;
+	ssh)
+		mkdir_save_path_ssh "${OPT[_target]}"
+		check_size ssh "${OPT[_target]}"
+		dracut_args+=(--sshkey "${OPT[sshkey]}")
+		;;
+	*)
+		derror "Unknown file system type ${OPT[_fstype]} given."
+		return 1
+	esac
 
 	if ! have_compression_in_dracut_args; then
 		# With dracut 104 the 99squash module got split up into
