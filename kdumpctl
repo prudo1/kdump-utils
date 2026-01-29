@@ -59,7 +59,10 @@ if ! dlog_init; then
 fi
 
 export KDUMP_TMPDIR=$(mktemp --tmpdir -d kdump.XXXX)
-[ -d "$KDUMP_TMPDIR" ] || perror_exit "kdumpctl: Failed to create tmpdir."
+[ -d "$KDUMP_TMPDIR" ] || {
+	derror "kdumpctl: Failed to create tmpdir."
+	exit 1
+}
 export KDUMP_TMPMNT="$KDUMP_TMPDIR/target"
 trap '
     ret=$?;

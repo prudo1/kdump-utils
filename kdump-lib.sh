@@ -43,12 +43,6 @@ has_command()
 	[[ -x $(command -v "$1") ]]
 }
 
-perror_exit()
-{
-	derror "$@"
-	exit 1
-}
-
 # Check if fence kdump is configured in Pacemaker cluster
 is_pcs_fence_kdump()
 {

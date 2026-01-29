@@ -71,7 +71,8 @@ get_ssh_size()
 	local _opt=("-i" "${OPT[sshkey]}" "-o" "BatchMode=yes" "-o" "StrictHostKeyChecking=yes")
 
 	if ! _out=$(ssh -q -n "${_opt[@]}" "$1" "df" "--output=avail" "${OPT[path]}"); then
-		perror_exit "checking remote ssh server available size failed."
+		derror "checking remote ssh server available size failed."
+		return 1
 	fi
 
 	echo -n "$_out" | tail -1
@@ -85,12 +86,16 @@ mkdir_save_path_ssh()
 {
 	local _opt _dir
 	_opt=(-i "${OPT[sshkey]}" -o BatchMode=yes -o StrictHostKeyChecking=yes)
-	ssh -qn "${_opt[@]}" "$1" mkdir -p "${OPT[path]}" &> /dev/null ||
-		perror_exit "mkdir failed on $1:${OPT[path]}"
+	ssh -qn "${_opt[@]}" "$1" mkdir -p "${OPT[path]}" &> /dev/null || {
+		derror "mkdir failed on $1:${OPT[path]}"
+		return 1
+	}
 
 	# check whether user has write permission on $1:${OPT[path]}
-	_dir=$(ssh -qn "${_opt[@]}" "$1" mktemp -dqp "${OPT[path]}" 2> /dev/null) ||
-		perror_exit "Could not create temporary directory on $1:${OPT[path]}. Make sure user has write permission on destination"
+	_dir=$(ssh -qn "${_opt[@]}" "$1" mktemp -dqp "${OPT[path]}" 2> /dev/null) || {
+		derror "Could not create temporary directory on $1:${OPT[path]}. Make sure user has write permission on destination"
+		return 1
+	}
 	ssh -qn "${_opt[@]}" "$1" rmdir "$_dir"
 
 	return 0
@@ -132,20 +137,14 @@ check_size()
 	*)
 		return
 		;;
-	esac || perror_exit "Check dump target size failed"
+	esac || {
+		derror "Check dump target size failed"
+		return 1
+	}
 
 	if [[ $avail -lt $memtotal ]]; then
 		dwarn "Warning: There might not be enough space to save a vmcore."
 		dwarn "         The size of $2 should be greater than $memtotal kilo bytes."
-	fi
-}
-
-check_save_path_fs()
-{
-	local _path=$1
-
-	if [[ ! -d $_path ]]; then
-		perror_exit "Dump path $_path does not exist."
 	fi
 }
 
@@ -166,7 +165,7 @@ mount_failure()
 		msg="$msg Please make sure nfs-utils has been installed, and nfs server is accessible."
 	fi
 
-	perror_exit "$msg"
+	derror "$msg"
 }
 
 check_user_configured_target()
@@ -183,7 +182,8 @@ check_user_configured_target()
 		[[ $_fstype == "nfs"* ]] && _fstype=nfs
 
 		if [[ -n $_cfg_fs_type ]] && [[ $_fstype != "$_cfg_fs_type" ]]; then
-			perror_exit "\"$_target\" have a wrong type config \"$_cfg_fs_type\", expected \"$_fstype\""
+			derror "\"$_target\" have a wrong type config \"$_cfg_fs_type\", expected \"$_fstype\""
+			return 1
 		fi
 	else
 		_fstype="$_cfg_fs_type"
@@ -199,25 +199,33 @@ check_user_configured_target()
 	if [[ -n $_mnt ]]; then
 		if ! is_mounted "$_mnt"; then
 			if [[ $_opt == *",noauto"* ]]; then
-				$_timeout_cmd mount "$_mnt" || mount_failure "$_target" "$_mnt" "$_fstype"
+				$_timeout_cmd mount "$_mnt" || {
+					mount_failure "$_target" "$_mnt" "$_fstype"
+					return 1
+				}
 				_mounted=$_mnt
 			else
-				perror_exit "Dump target \"$_target\" is neither mounted nor configured as \"noauto\""
+				derror "Dump target \"$_target\" is neither mounted nor configured as \"noauto\""
+				return 1
 			fi
 		fi
 	else
 		_mnt=$KDUMP_TMPMNT
 		mkdir -p "$_mnt"
-		$_timeout_cmd mount "$_target" "$_mnt" -t "$_fstype" -o defaults || mount_failure "$_target" "" "$_fstype"
+		$_timeout_cmd mount "$_target" "$_mnt" -t "$_fstype" -o defaults || {
+			mount_failure "$_target" "" "$_fstype"
+			return 1
+		}
 		_mounted=$_mnt
 	fi
 
 	# For user configured target, use ${OPT[path]} as the dump path within the target
 	if [[ ! -d "$_mnt/${OPT[path]}" ]]; then
-		perror_exit "Dump path \"${OPT[path]}\" does not exist in dump target \"$_target\""
+		derror "Dump path \"${OPT[path]}\" does not exist in dump target \"$_target\""
+		return 1
 	fi
 
-	check_size fs "$_target"
+	check_size fs "$_target" || return 1
 
 	# Unmount it early, if function is interrupted and didn't reach here, the shell trap will clear it up anyway
 	if [[ -n $_mounted ]]; then
@@ -227,7 +235,7 @@ check_user_configured_target()
 
 add_mount()
 {
-	dracut_args+=(--mount "$(to_mount "$@")") || exit 1
+	dracut_args+=(--mount "$(to_mount "$@")") || return 1
 }
 
 #handle the case user does not specify the dump target explicitly
@@ -235,7 +243,10 @@ handle_default_dump_target()
 {
 	local _target _mntpoint _fstype _subvol _options
 
-	check_save_path_fs "${OPT[path]}"
+	[[ -d "${OPT[path]}" ]] || {
+		derror "Dump path ${OPT[path]} does not exist."
+		return 1
+	}
 
 	_save_path=$(get_bind_mount_source "${OPT[path]}")
 	_options=$(get_mount_info OPTIONS target "$_save_path" -f)
@@ -247,8 +258,8 @@ handle_default_dump_target()
 
 	_mntpoint=$(get_mntpoint_from_target "$_target" "$_subvol")
 	{OPT[path]}=${_save_path##"$_mntpoint"}
-	add_mount "$_target" "$_fstype" "$_options"
-	check_size fs "$_target" "$_subvol"
+	add_mount "$_target" "$_fstype" "$_options" || return 1
+	check_size fs "$_target" "$_subvol" || return 1
 }
 
 have_compression_in_dracut_args()
@@ -288,25 +299,26 @@ mkdumprd()
 
 	case "${OPT[_fstype]}" in
 	"")
-		handle_default_dump_target
+		handle_default_dump_target || return 1
 		;;
 	ext[234] | xfs | btrfs | minix | nfs | virtiofs)
-		check_user_configured_target "${OPT[_target]}" "${OPT[_fstype]}"
-		add_mount "${OPT[_target]}" "${OPT[_fstype]}"
+		check_user_configured_target "${OPT[_target]}" "${OPT[_fstype]}" || return 1
+		add_mount "${OPT[_target]}" "${OPT[_fstype]}" || return 1
 		;;
 	raw)
 		# checking raw disk writable
 		dd if="${OPT[_target]}" count=1 of=/dev/null > /dev/null 2>&1 || {
-			perror_exit "Bad raw disk ${OPT[_target]}"
+			derror "Bad raw disk ${OPT[_target]}"
+			return 1
 		}
 		_praw=$(persistent_policy="by-id" kdump_get_persistent_dev "${OPT[_target]}")
 		[[ -n $_praw ]] || return 1
 		dracut_args+=(--device "$_praw")
-		check_size raw "${OPT[_target]}"
+		check_size raw "${OPT[_target]}" || return 1
 		;;
 	ssh)
-		mkdir_save_path_ssh "${OPT[_target]}"
-		check_size ssh "${OPT[_target]}"
+		mkdir_save_path_ssh "${OPT[_target]}" || return 1
+		check_size ssh "${OPT[_target]}" || return 1
 		dracut_args+=(--sshkey "${OPT[sshkey]}")
 		;;
 	*)
@@ -342,7 +354,9 @@ mkdumprd()
 		# The 2nd rootfs mount stays behind the normal dump target
 		# mount, so it doesn't affect the logic of
 		# check_dump_fs_modified().
-		is_dump_to_rootfs && add_mount "$(to_dev_name "$(get_root_fs_device)")"
+		is_dump_to_rootfs && {
+			add_mount "$(to_dev_name "$(get_root_fs_device)")" || return 1
+		}
 
 		dracut_args+=(--no-hostonly-default-device)
 
@@ -362,7 +376,7 @@ mkdumprd()
 			if mountpoint -q /boot; then
 				dracut_args+=(--add-device "$_disk_persistent")
 			else
-				add_mount "$_boot_source"
+				add_mount "$_boot_source" || return 1
 			fi
 		fi
 	fi
@@ -382,7 +396,10 @@ mkdumprd()
 mkfadumprd()
 {
 	MKFADUMPRD_TMPDIR="$KDUMP_TMPDIR/mkfadump"
-	mkdir "$MKFADUMP_TMPDIR" || perror_exit "Failed to create mkfadump tmpdir."
+	mkdir "$MKFADUMP_TMPDIR" || {
+		derror "Failed to create mkfadump tmpdir."
+		return 1
+	}
 
 	# Default boot initramfs to be rebuilt
 	REBUILD_INITRD="$1" && shift
@@ -398,7 +415,8 @@ mkfadumprd()
 	# Don't compress the capture image as uncompressed image is needed immediately.
 	# Also, early microcode would not be needed here.
 	if ! mkdumprd "$FADUMP_INITRD" -i "$MKFADUMPRD_TMPDIR/fadump.initramfs" /etc/fadump.initramfs --omit squash --omit squash-squashfs --omit squash-erofs --no-compress --no-early-microcode; then
-		perror_exit "mkfadumprd: failed to build image with dump capture support"
+		derror "mkfadumprd: failed to build image with dump capture support"
+		return 1
 	fi
 
 	### Unpack the initramfs having dump capture capability retaining previous file modification time.
@@ -406,7 +424,7 @@ mkfadumprd()
 	mkdir -p "$MKFADUMPRD_TMPDIR/fadumproot"
 	if ! cpio -id --preserve-modification-time --quiet -D "$MKFADUMPRD_TMPDIR/fadumproot" < "$FADUMP_INITRD"; then
 		derror "mkfadumprd: failed to unpack '$MKFADUMPRD_TMPDIR'"
-		exit 1
+		return 1
 	fi
 
 	### Pack it into the normal boot initramfs with zz-fadumpinit module
@@ -421,6 +439,7 @@ mkfadumprd()
 	has_command zstd && _dracut_isolate_args+=(--compress zstd)
 
 	if ! dracut --force --quiet "${_dracut_isolate_args[@]}" "$@" "$TARGET_INITRD"; then
-		perror_exit "mkfadumprd: failed to setup '$TARGET_INITRD' with dump capture capability"
+		derror "mkfadumprd: failed to setup '$TARGET_INITRD' with dump capture capability"
+		return 1
 	fi
 }
