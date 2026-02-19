@@ -133,30 +133,6 @@ get_failure_action_target()
 	fi
 }
 
-# Get kdump targets(including root in case of dump_to_rootfs).
-get_kdump_targets()
-{
-	local _target _root
-	local kdump_targets
-
-	_target=$(get_block_dump_target)
-	if [[ -n $_target ]]; then
-		kdump_targets=$_target
-	elif is_ssh_dump_target; then
-		kdump_targets="ssh"
-	else
-		kdump_targets="nfs"
-	fi
-
-	# Add the root device if dump_to_rootfs is specified.
-	_root=$(get_failure_action_target)
-	if [[ -n $_root ]] && [[ $kdump_targets != "$_root" ]]; then
-		kdump_targets="$kdump_targets $_root"
-	fi
-
-	echo "$kdump_targets"
-}
-
 # Return the bind mount source path, return the path itself if it's not bind mounted
 # Eg. if /path/to/src is bind mounted to /mnt/bind, then:
 # /mnt/bind -> /path/to/src, /mnt/bind/dump -> /path/to/src/dump
